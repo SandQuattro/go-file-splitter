@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"log"
 	"os"
@@ -60,20 +61,13 @@ func run(fileName string, chunk int) error {
 
 	reader := bufio.NewReader(file)
 
-	for {
-		chunkFile, err := os.Create(fmt.Sprintf("chunk_%d_%s", chunkNum, info.Name()))
-		if err != nil {
-			log.Println("error creating chunk file", err)
-			return err
-		}
-		writer := bufio.NewWriter(chunkFile)
+	g := errgroup.Group{}
 
+	for {
 		buff := pool.Get().([]byte)
 		cnt, err := reader.Read(buff)
 
 		if err == io.EOF {
-			writer.Flush()
-			chunkFile.Close()
 			log.Println("file processing done")
 			break
 		}
@@ -85,18 +79,33 @@ func run(fileName string, chunk int) error {
 
 		log.Printf("chunk %d read %d bytes", chunkNum, cnt)
 
-		cnt, err = writer.Write(buff[:cnt])
-		if err != nil {
-			log.Println("writer error: ", err)
-			return err
+		g.Go(func() error {
+			defer pool.Put(buff)
+
+			chunkFile, err := os.Create(fmt.Sprintf("chunk_%d_%s", chunkNum, info.Name()))
+			if err != nil {
+				log.Println("error creating chunk file", err)
+				return err
+			}
+			defer chunkFile.Close()
+
+			writer := bufio.NewWriter(chunkFile)
+			defer writer.Flush()
+
+			cnt, err = writer.Write(buff[:cnt])
+			if err != nil {
+				log.Println("writer error: ", err)
+				return err
+			}
+
+			log.Printf("chunk %d write %d bytes", chunkNum, cnt)
+			return nil
+		})
+
+		if err := g.Wait(); err != nil {
+			log.Println("error processing chunk: ", err)
+			log.Fatal(err)
 		}
-
-		log.Printf("chunk %d write %d bytes", chunkNum, cnt)
-
-		writer.Flush()
-		chunkFile.Close()
-
-		pool.Put(buff)
 
 		if chunkNum > int(info.Size())/chunkSize {
 			break
