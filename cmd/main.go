@@ -12,14 +12,20 @@ import (
 
 func main() {
 	var fileName string
+	var chunk int
 	flag.StringVar(&fileName, "file", "", "-file=name")
+	flag.IntVar(&chunk, "chunk", -1, "chunk size in MB, -chunk=5")
 	flag.Parse()
 
 	if fileName == "" {
 		log.Fatal("-file flag is required")
 	}
 
-	err := run(fileName)
+	if chunk <= 0 {
+		log.Fatal("chunk size must be greater than zero")
+	}
+
+	err := run(fileName, chunk)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -28,7 +34,7 @@ func main() {
 
 }
 
-func run(fileName string) error {
+func run(fileName string, chunk int) error {
 	file, err := os.OpenFile(fileName, os.O_RDONLY, 0666)
 	if err != nil {
 		log.Println(err)
@@ -45,7 +51,7 @@ func run(fileName string) error {
 	log.Printf("file %s size %d", file.Name(), info.Size())
 
 	var chunkNum = 1
-	var chunkSize = 20 << 20
+	var chunkSize = chunk << 20
 
 	pool := sync.Pool{}
 	pool.New = func() interface{} {
