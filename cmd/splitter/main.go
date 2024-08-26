@@ -31,7 +31,8 @@ func main() {
 		log.Fatal(err)
 		return
 	}
-	log.Println("file processing done")
+
+	log.Println("file processing done, bye, bye")
 
 }
 
@@ -64,6 +65,7 @@ func run(fileName string, chunk int) error {
 	g := errgroup.Group{}
 
 	for {
+		// A Pool is safe for use by multiple goroutines simultaneously. https://pkg.go.dev/sync#Pool
 		buff := pool.Get().([]byte)
 		cnt, err := reader.Read(buff)
 
@@ -77,7 +79,7 @@ func run(fileName string, chunk int) error {
 			break
 		}
 
-		log.Printf("chunk %d read %d bytes", chunkNum, cnt)
+		log.Printf("chunk %d  read %d bytes", chunkNum, cnt)
 
 		g.Go(func() error {
 			defer pool.Put(buff)
